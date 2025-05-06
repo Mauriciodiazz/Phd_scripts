@@ -5,13 +5,13 @@ library(sf)
 library(terra)
 
 # Species data
-data<-read_tsv("./species/GBIF/0039607-240906103802322.csv", quote = "") |> 
+data<-read_tsv("./species/GBIF/0001074-241106120511685.csv", quote = "") |> 
   select(1, 4:10, 13,16:18, 22:25,30:33,36:38)
-data |> 
-  head()
+# data |> 
+#   head()
 
 spp<-levels(factor(data$species))
-spp
+# spp
 
 # Rasters
 bio1<-rast("inputs/CHELSA/CHELSA_bio1_1981-2010_V.2.1.tif")
@@ -34,7 +34,7 @@ decimalplaces <- function(x) {
 }
 
 for(i in 1:length(spp)){
-print(spp[i])
+print(paste(i, "from",length(spp)," / ",spp[i]))
 # 1. Seleccionar cada especie
 spp.name<-spp[i] |> 
   str_split_1(pattern=" ") |> 
@@ -104,3 +104,58 @@ ggsave(filename = paste0("./species/monthly_graphs/",spp.name,".png"),
        dpi = 200)
 }
 
+
+# Cuantos registros hay por especie?
+library(sf)
+library(tidyverse)
+spp.names<-list.files("./species/mig_shapes/", pattern = ".shp")
+spp.list<-list.files("./species/mig_shapes/", pattern = ".shp", full.names = T)
+
+spp.regs<-data.frame(matrix(ncol=13, nrow=length(spp.names)))
+names(spp.regs)<-c("spp", 1:12)
+
+for (x in 1:length(spp.list)) {
+  print(paste(x, "/", spp.names[x] |> str_remove("_sd.txt")))
+  # leer el vector
+  spp<-read_sf(spp.list[x])
+  spp.regs[x,1]<- spp.names[x] |> 
+    str_remove(".shp")
+  for(y in 1:12){
+    spp.regs[x,(y+1)] <- spp |> 
+      filter(month==y) |> 
+      nrow()
+  }
+}
+
+spp.regs |>
+  write.table("./outputs/tablas/regsxspp.txt", sep="\t", dec=".", row.names = F)
+
+# gráficos latitudinales
+
+for (x in 1:length(spp.list)) {
+print(paste(x, "/", spp.names[x] |> str_remove(".shp")))
+spp<-read_sf(spp.list[x])
+spp |> 
+  #obtener coordenadas del shape
+  mutate(lon = sf::st_coordinates(spp)[,1],
+         lat = sf::st_coordinates(spp)[,2]) |> 
+  # convertirlo en una tabla
+  as_tibble() |> 
+  # Crear una columna que contenga la latitud en un solo dígito
+  mutate(lat.gr=lat |> 
+           round(digits = 0)) |> 
+  # Crear la tabla de la cantidad de registros por latitud y por mes
+  summarise(n=n(), .by=c(lat.gr, month)) |> 
+  ggplot(aes(x=lat.gr, y=n)) +
+  geom_bar(stat='identity')+
+  coord_flip()+
+  labs(x="latitude", y="n. regs", title = spp.names[x] |> str_remove(".shp"))+
+  facet_wrap(~month)
+
+ggsave(filename = paste0("./species/monthly_graphs/", spp.names[x] |> str_remove(".shp"),".png"),
+       width = 10,
+       height = 10, #alto
+       scale=2,
+       units ="cm",
+       dpi = 200)
+}
