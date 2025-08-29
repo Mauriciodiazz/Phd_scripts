@@ -159,3 +159,120 @@ ggsave(filename = paste0("./species/monthly_graphs/", spp.names[x] |> str_remove
        units ="cm",
        dpi = 200)
 }
+
+
+### Despues de filtrar geográficamente las especies
+
+# 1. cuánrtas son? - 104 especies
+library(terra)
+library(tidyverse)
+
+spp.list<-list.files("./species/mig_shapes/ok/", pattern=".shp", full.names = T)
+spp.names<-list.files("./species/mig_shapes/ok/", pattern=".shp") |> str_remove(".shp")
+
+#2. cuantos puntos por mes hay para cada especie
+
+lista<-list()
+
+##
+pb <- txtProgressBar(min = 0,      # Valor mínimo de la barra de progreso
+                     max = length(spp.list), # Valor máximo de la barra de progreso
+                     style = 3,    # Estilo de la barra (también style = 1 y style = 2)
+                     width = 50,   # Ancho de la barra. Por defecto: getOption("width")
+                     char = "=")   # Carácter usado para crear la barra
+
+for (x in 1:length(spp.list)) {
+ 
+sp.vec <- vect(spp.list[x])
+
+lista[[x]]<-
+  sp.vec |> st_as_sf() |> 
+  filter(year>=1901 & year<=2016) |> 
+  data.frame() |> 
+  summarise(n=n(), .by=month) |> 
+  mutate(spp.name=spp.names[x])
+
+setTxtProgressBar(pb, x)
+}
+
+close(pb) # Cerramos la conexión
+# save.image("./outputs/Rdata/sp.rcs.list.Rdata")
+load("./outputs/Rdata/sp.rcs.list.Rdata")
+
+spmig.df<-
+  do.call(rbind, lista) |> 
+  pivot_wider(names_from = month, values_from = n) |> 
+ # select(!`0`) |> 
+  rename("En"=`1`,
+         "Fe"=`2`,
+         "Ma"=`3`,
+         "Ab"=`4`,
+         "My"=`5`,
+         "Jn"=`6`,
+         "Jl"=`7`,
+         "Ag"=`8`,
+         "Se"=`9`,
+         "Oc"=`10`,
+         "No"=`11`,
+         "Di"=`12`)
+
+spmig.df[c(50,39,19),]
+
+
+# write.table(spmig.df,"./outputs/tablas/spp.rcs.txt", dec=".", sep="\t", row.names = F)
+ 
+#grafico
+
+do.call(rbind, lista) |> 
+  mutate(categoria = case_when(
+    n < 10            ~ 1,
+    n >= 10 & n < 100  ~ 2,
+    n >= 100 & n < 200 ~ 3,
+    n >= 200 & n < 500 ~ 4,
+    n > 500  ~ 5),
+    month = case_when(
+      month == 1 ~ "En",
+      month == 2 ~ "Fe",
+      month == 3 ~ "Ma",
+      month == 4 ~ "Ab",
+      month == 5 ~ "My",
+      month == 6 ~ "Jn",
+      month == 7 ~ "Jl",
+      month == 8 ~ "Ag",
+      month == 9 ~ "Se",
+      month == 10 ~ "Oc",
+      month == 11 ~ "No",
+      month == 12 ~ "Di")) |> 
+#  filter(month!=0) |> 
+#  mutate(facet=rep(c(1,2,3), each=384)) |>  
+  ggplot(aes(x = factor(month, 
+                        levels = c("En", "Fe", "Ma", "Ab", "My", "Jn", "Jl", "Ag", "Se", "Oc", "No", "Di")), 
+             y = spp.name, fill = factor(categoria))) +
+  geom_tile(color = "white") +
+  scale_fill_manual(values = c(
+    "1" = "red4",
+    "2" = "#cadde9",
+    "3" = "#95bad3",
+    "4" = "#6098bc",
+    "5" = "#2b75a6"),
+    labels = c(
+      "1" = "< 10",
+      "2" = "10 - 100",
+      "3" = "100 - 200",
+      "4" = "200 - 500",
+      "5" = "> 500")) +
+  coord_fixed() +
+  theme_minimal() +
+  labs(fill = "Categoría", x="", y="") +
+  theme(axis.text.x = element_text(angle=90, vjust=0.5))
+
+ggsave(filename = "./outputs/images/regs_mens.svg",
+       width = 13,
+       height = 10, #alto
+       scale=3,
+       units ="cm",
+       dpi = 200)
+
+
+
+
