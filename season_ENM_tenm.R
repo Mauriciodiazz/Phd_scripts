@@ -6,7 +6,7 @@ library(tidyverse)
 library(sf)
 
 # Open species file
-tenm_mask <- terra::rast(list.files("D:/CHELSA_ym_5k/1901-01/", full.names=T, pattern=".tif$"))
+tenm_mask <- terra::rast(list.files("E:/CHELSA_ym_5k/1901-01/", full.names=T, pattern=".tif$"))
 names(tenm_mask)<-names(tenm_mask) |> 
   str_remove("CHELSAcruts_") |> 
   str_remove("_V.1.0")
@@ -161,7 +161,9 @@ spp.names<-list.files("./species/mig_shapes/Selected/", full.names = F, pattern=
 #s<-68 # ok :65, 68 - Setophagas: 68-85
 #spp.list[c(65,68:85)]
 
-for (s in c(74:85)) {
+c(1:64,66:67,86:length(spp.list))
+
+for (s in c(1:64,66:67,86:length(spp.list))) {
   print(spp.names[s])
   
   spp<-vect(spp.list[s])
@@ -179,11 +181,9 @@ for (s in c(74:85)) {
   mods_table.list<-list()
   
   # spp folder
-  # OJO!!!!!!!!!!!!!!
   spp.folder<-paste0(spp.names[s],"_ENMs")
 # load(paste0("./species/mig_ENM/seasonaly/", spp.folder,"/ENM_s_", spp.names[s],".Rdata"))
   dir.create(paste0("./species/mig_ENM/seasonaly/", spp.folder)) # Seasonal ENM 
-  
   
   for (m in 1:4) {
     # Transformin it as data.frame
@@ -208,7 +208,7 @@ for (s in c(74:85)) {
       mutate(date=paste(date, "01", sep="-")) 
     
     # We indicate the path where our time-specific modeling layers are located (variables).
-    tempora_layers_dir <- "D:/CHELSA_ym_5k/"
+    tempora_layers_dir <- "E:/CHELSA_ym_5k/"
     
     # sp_temporal_data will allow us to work with time-specific data
     abt <- tenm::sp_temporal_data(occs = spp.df,
@@ -241,7 +241,7 @@ for (s in c(74:85)) {
     # nrow(abt$temporal_df)
     
     # Time-specific environmental data extraction -----------------------------
-    print(paste("abex", m))
+    print(paste(spp.names[s], s, "abex", m))
     future::plan("multisession",workers=5) # Allow that ex_by_date could be run in parallel
     abex <- tenm::ex_by_date(this_species = abtc,
                              train_prop=0.7) # train=0.7 and test=0.3
@@ -252,11 +252,11 @@ for (s in c(74:85)) {
     
     # Time-specific background generation -------------------------------------
     
-    print(paste("abbg", m))
+    print(paste(spp.names[s], s, "abbg", m))
     future::plan("multisession",workers=5)
     abbg <- backg_CHcr(this_species = abex,
-                       buffer_ngbs=50,
-                       n_bg=50000, ### 
+                       buffer_ngbs=50,###
+                       n_bg=150000, ### 
                        buffer_distance=5000)
     future::plan("sequential")
     
@@ -364,7 +364,7 @@ for (s in c(74:85)) {
   save.image(paste0("./species/mig_ENM/seasonaly/", spp.folder,"/ENM_s_", spp.names[s],".Rdata"))
   
   #delete all except tenm_mask and the background function from environment
-  print(paste(spp.names[s], "done"))
+  print(paste(spp.names[s], s, "done"))
   rm(list = setdiff(ls(), c("tenm_mask", "backg_CHcr", "spp.list", "spp.names", "tdf2swd2")))
 }
 

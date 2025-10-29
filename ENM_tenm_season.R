@@ -14,7 +14,8 @@ names(tenm_mask)<-names(tenm_mask) |>
 # Funcion para generar el background --------------------------------------
 # las celdas vacías de CHELSAcruts estan indexadas como valores nulos o NA (NaN) y eso genera conflicto en la conformación del backgorund de este paquete. La función establece pixeles al rededor de los puntos de presencia para obtener el backgorund, lo que hice fue modificarlo de manera que cuando detectara valores ausentes en al menos una de las capas en esa coordenada eliminara el id de esas celdas (que era el mismo basicamente), porque estaba cogiendo el valor de los pixeles que tuvieran ambiente así solo un raster tuviera valor ambiental.
 
-
+# Modificación funciones
+# Aquella que genera los puntos de backgorund
 backg_CHcr<-function (this_species, buffer_ngbs = NULL, buffer_distance = 1000, 
                       n_bg = 50000, process_ngbs_by = 100) 
 {
@@ -154,14 +155,13 @@ tdf2swd2<-function (this_species, sp_name = "sp")
   return(swd_df)
 }
 
-# Species occurrences
 spp.list<-list.files("./species/mig_shapes/Selected/", full.names = T, pattern=".shp$")
 spp.names<-list.files("./species/mig_shapes/Selected/", full.names = F, pattern=".shp$") |> str_remove(".shp")
 
 #s<-68 # ok :65, 68 - Setophagas: 68-85
-#spp.list[c(65,68:85)]
-# s<-65
-for (s in 66:67) { # listas c(65,68:85) # falta 66-84 porque termina rapido
+#spp.list[c(65,68:71)]
+
+for (s in c(68:85)) {
   print(spp.names[s])
   
   spp<-vect(spp.list[s])
@@ -180,11 +180,12 @@ for (s in 66:67) { # listas c(65,68:85) # falta 66-84 porque termina rapido
   
   # spp folder
   # OJO!!!!!!!!!!!!!!
-  spp.folder<-paste0(spp.names[s],"_ENMm")
-  # load(paste0("./species/mig_ENM/monthly/", spp.folder,"/ENM_", spp.names[s],".Rdata"))
-  dir.create(paste0("./species/mig_ENM/monthly/", spp.folder)) # Monthly ENM
+  spp.folder<-paste0(spp.names[s],"_ENMs")
+  # load(paste0("./species/mig_ENM/seasonaly/", spp.folder,"/ENM_s_", spp.names[s],".Rdata"))
+  #dir.create(paste0("./species/mig_ENM/seasonaly/", spp.folder)) # Seasonal ENM 
   
-  for (m in 1:12) {
+  
+  for (m in 1:4) {
     # Transformin it as data.frame
     spp.df<-
       spp2 |>
@@ -194,8 +195,13 @@ for (s in 66:67) { # listas c(65,68:85) # falta 66-84 porque termina rapido
       drop_na("prec_1_1901", "tmax_1_1901", "tmin_1_1901") |> 
       rename("lon" = X, "lat" = Y) |>
       as.data.frame() |>
-      select(species, lon, lat, year, month) |>
-      filter(month==m) |> 
+      mutate(season=case_when(
+        month %in% c(12,1,2) ~ 1,
+        month %in% 3:5 ~ 2,
+        month %in% 6:8 ~ 3,
+        month %in% 9:11 ~ 4)) |> 
+      select(species, lon, lat, year, month, season) |>
+      filter(season==m) |>  ### SEASON FILTERING
       filter(year>=1901 & year<=2016) |> 
       unite("date", year, month, sep="-", remove=F) |> 
       mutate(date = str_replace(date, "-(\\d)$", "-0\\1")) |> # date format YYYY-MM
@@ -224,7 +230,7 @@ for (s in 66:67) { # listas c(65,68:85) # falta 66-84 porque termina rapido
     abtc <- tenm::clean_dup_by_date(this_species = abt,
                                     by_mask = TRUE,
                                     threshold = terra::res(tenm_mask)[1],
-                                    raster_mask = tenm_mask[[1]],
+                                    raster_mask = tenm_mask[[1]], ##
                                     n_ngbs = 0)
     
     # # Check number of records
@@ -235,8 +241,8 @@ for (s in 66:67) { # listas c(65,68:85) # falta 66-84 porque termina rapido
     # nrow(abt$temporal_df)
     
     # Time-specific environmental data extraction -----------------------------
-    print(paste(spp.names[s], s, "abex", m))
-    future::plan("multisession",workers=2) # Allow that ex_by_date could be run in parallel
+    print(paste("abex", m))
+    future::plan("multisession",workers=5) # Allow that ex_by_date could be run in parallel
     abex <- tenm::ex_by_date(this_species = abtc,
                              train_prop=0.7) # train=0.7 and test=0.3
     future::plan("sequential")
@@ -246,14 +252,14 @@ for (s in 66:67) { # listas c(65,68:85) # falta 66-84 porque termina rapido
     
     # Time-specific background generation -------------------------------------
     
-    print(paste(spp.names[s], s, "abbg", m))
-    future::plan("multisession",workers=2)
+    print(paste("abbg", m))
+    future::plan("multisession",workers=5)
     abbg <- backg_CHcr(this_species = abex,
-                       buffer_ngbs=50, ####
-                       n_bg=150000, #### SEASON 150K
+                       buffer_ngbs=50,
+                       n_bg=50000, ### 
                        buffer_distance=5000)
     future::plan("sequential")
-
+    
     abbg.list[[m]]<-abbg
     names(abbg.list)[m]<-paste0("abbg_", spp.names[s], "_", m)
 
@@ -263,14 +269,15 @@ for (s in 66:67) { # listas c(65,68:85) # falta 66-84 porque termina rapido
     occ_swd <- tdf2swd2(this_species = abex, 
                        sp_name = "Sel_calli")
     
-    occ_swd |>
-      mutate(month=m) |>
-      relocate(month, .after=sp_name) |>
-      write.table(paste0("./species/mig_ENM/monthly/", spp.folder, "/", spp.names[s], "_ENM_", m, ".txt"),
+    occ_swd |> 
+      mutate(season=m) |> 
+      relocate(season, .after=sp_name) |> 
+      write.table(paste0("./species/mig_ENM/seasonaly/", spp.folder, "/", 
+                         spp.names[s], "_ENMs_", m, ".txt"), 
                   sep="\t",
                   dec=".",
                   row.names=F)
-
+    
     # SWD table for background data
     bg_swd <- tdf2swd2(this_species = abbg) #missing year values
     # head(tidyr::as_tibble(occ_swd))
@@ -284,7 +291,7 @@ for (s in 66:67) { # listas c(65,68:85) # falta 66-84 porque termina rapido
     
     mod_sel <- tenm::tenm_selection(this_species = abbg,
                                     omr_criteria =1,
-                                    ellipsoid_level=0.999, #0.975 by default
+                                    ellipsoid_level= 0.975, #by default
                                     vars2fit = vars2fit,
                                     nvars_to_fit=3,
                                     proc = T,
@@ -296,27 +303,26 @@ for (s in 66:67) { # listas c(65,68:85) # falta 66-84 porque termina rapido
     #mod_sel$mods_table #resultados de la evalaución
     
     mod_sel.list[[m]]<-mod_sel
-    
     mods_table.list[[m]]<-
       mod_sel$mods_table |>
-      mutate(month=m,
+      mutate(season=m,
              species=spp.names[s]) |> 
-      relocate(species, month)
+      relocate(species, season)
     
   }
-  
+ 
   # drop list
   mods_table.df<-do.call(rbind, mods_table.list) |> 
     select(!c(non_pred_test_ids,non_pred_train_ids))
   
   write.table(mods_table.df, 
-              paste0("./species/mig_ENM/monthly/", spp.folder,"/ENM_mods_", spp.names[s],".txt"),
+              paste0("./species/mig_ENM/seasonaly/", spp.folder,"/ENM_mods_s_", spp.names[s],".txt"),
               sep="\t",
               dec=".",
               row.names=F)
 
-  # Plotting ellipsoid -----------------------------------------------------
-    
+  # Plotting ellipsoid ------------------------------------------------------
+  
   x1 <- abex.list[[1]][[1]]$tmin
   y1 <- abex.list[[1]][[1]]$tmax
   z1 <- abex.list[[1]][[1]]$prec
@@ -333,81 +339,28 @@ for (s in 66:67) { # listas c(65,68:85) # falta 66-84 porque termina rapido
   y4 <- abex.list[[4]][[1]]$tmax
   z4 <- abex.list[[4]][[1]]$prec
   
-  x5 <- abex.list[[5]][[1]]$tmin
-  y5 <- abex.list[[5]][[1]]$tmax
-  z5 <- abex.list[[5]][[1]]$prec
-  
-  x6 <- abex.list[[6]][[1]]$tmin
-  y6 <- abex.list[[6]][[1]]$tmax
-  z6 <- abex.list[[6]][[1]]$prec
-  
-  x7 <- abex.list[[7]][[1]]$tmin
-  y7 <- abex.list[[7]][[1]]$tmax
-  z7 <- abex.list[[7]][[1]]$prec
-  
-  x8 <- abex.list[[8]][[1]]$tmin
-  y8 <- abex.list[[8]][[1]]$tmax
-  z8 <- abex.list[[8]][[1]]$prec
-  
-  x9 <- abex.list[[9]][[1]]$tmin
-  y9 <- abex.list[[9]][[1]]$tmax
-  z9 <- abex.list[[9]][[1]]$prec
-  
-  x10 <- abex.list[[10]][[1]]$tmin
-  y10 <- abex.list[[10]][[1]]$tmax
-  z10 <- abex.list[[10]][[1]]$prec
-  
-  x11 <- abex.list[[11]][[1]]$tmin
-  y11 <- abex.list[[11]][[1]]$tmax
-  z11 <- abex.list[[11]][[1]]$prec
-  
-  x12 <- abex.list[[12]][[1]]$tmin
-  y12 <- abex.list[[12]][[1]]$tmax
-  z12 <- abex.list[[12]][[1]]$prec
   
   # 3D ellipsoid
-  
-  # # -----------
-  # month.folder<-list.files("./species/mig_ENM/monthly/", full.names = T)
-  # for (x in 1:length(month.folder)) {
-  # load(list.files(month.folder[x], pattern=".Rdata$", full.names=T))
-  # #------------
-  
   rgl::par3d(windowRect = c(150, 150, 1000, 1000))  # c(xmin, ymin, xmax, ymax)
-  tenm::plot_ellipsoid(x = x12, y=y12, z=z12, semiaxes= FALSE, xlab="tmin", ylab="tmax", zlab="prec", col="#4a72b0")
-  rgl::rgl.snapshot(paste0("./species/mig_ENM/monthly/", spp.folder,"/ENM_12_", spp.names[s],".png"))
-  tenm::plot_ellipsoid(x = x1, y=y1, z=z1 ,semiaxes= FALSE, col="#4a72b0", mve=T, add=TRUE)
-  rgl::rgl.snapshot(paste0("./species/mig_ENM/monthly/", spp.folder,"/ENM_1_", spp.names[s],".png"))
-  tenm::plot_ellipsoid(x = x2, y=y2, z=z2 ,semiaxes= FALSE, col="#4a72b0", mve=T, add=TRUE)
-  rgl::rgl.snapshot(paste0("./species/mig_ENM/monthly/", spp.folder,"/ENM_2_", spp.names[s],".png"))
-  tenm::plot_ellipsoid(x = x3, y=y3, z=z3 ,semiaxes= FALSE, col="#6ea96e", mve=T, add=TRUE)
-  rgl::rgl.snapshot(paste0("./species/mig_ENM/monthly/", spp.folder,"/ENM_3_", spp.names[s],".png"))
-  tenm::plot_ellipsoid(x = x4, y=y4, z=z4 ,semiaxes= FALSE, col="#6ea96e", mve=T, add=TRUE)
-  rgl::rgl.snapshot(paste0("./species/mig_ENM/monthly/", spp.folder,"/ENM_4_", spp.names[s],".png"))
-  tenm::plot_ellipsoid(x = x5, y=y5, z=z5 ,semiaxes= FALSE, col="#6ea96e", mve=T, add=TRUE)
-  rgl::rgl.snapshot(paste0("./species/mig_ENM/monthly/", spp.folder,"/ENM_5_", spp.names[s],".png"))
-  tenm::plot_ellipsoid(x = x6, y=y6, z=z6 ,semiaxes= FALSE, col="#da9500", mve=T, add=TRUE)
-  rgl::rgl.snapshot(paste0("./species/mig_ENM/monthly/", spp.folder,"/ENM_6_", spp.names[s],".png"))
-  tenm::plot_ellipsoid(x = x7, y=y7, z=z7 ,semiaxes= FALSE, col="#da9500", mve=T, add=TRUE)
-  rgl::rgl.snapshot(paste0("./species/mig_ENM/monthly/", spp.folder,"/ENM_7_", spp.names[s],".png"))
-  tenm::plot_ellipsoid(x = x8, y=y8, z=z8 ,semiaxes= FALSE, col="#da9500", mve=T, add=TRUE)
-  rgl::rgl.snapshot(paste0("./species/mig_ENM/monthly/", spp.folder,"/ENM_8_", spp.names[s],".png"))
-  tenm::plot_ellipsoid(x = x9, y=y9, z=z9 ,semiaxes= FALSE, col="#294029", mve=T, add=TRUE)
-  rgl::rgl.snapshot(paste0("./species/mig_ENM/monthly/", spp.folder,"/ENM_9_", spp.names[s],".png"))
-  tenm::plot_ellipsoid(x = x10, y=y10, z=z10 ,semiaxes= FALSE, col="#294029", mve=T, add=TRUE)
-  rgl::rgl.snapshot(paste0("./species/mig_ENM/monthly/", spp.folder,"/ENM_10_", spp.names[s],".png"))
-  tenm::plot_ellipsoid(x = x11, y=y11, z=z11 ,semiaxes= FALSE, col="#294029", mve=T, add=TRUE)
-  rgl::rgl.snapshot(paste0("./species/mig_ENM/monthly/", spp.folder,"/ENM_11_", spp.names[s],".png"))
-  # } # ---------------
+  tenm::plot_ellipsoid(x = x1, y=y1, z=z1, semiaxes= FALSE, xlab="tmin", ylab="tmax", zlab="prec", col="#4a72b0")
+  # rgl::plot3d(x=x1,y=y1,z=z1, col="blue",add=T)
+  # rgl::rgl.snapshot(paste0("./species/mig_ENM/seasonaly/", spp.folder,"/ENM_1_", spp.names[s],".png"))
+  tenm::plot_ellipsoid(x = x2, y=y2, z=z2 ,semiaxes= FALSE, col="#6ea96e", mve=T, add=TRUE)
+  # rgl::plot3d(x=x2,y=y2,z=z2, col="#6ea96e",add=T)
+  # rgl::rgl.snapshot(paste0("./species/mig_ENM/seasonaly/", spp.folder,"/ENM_2_", spp.names[s],".png"))
+  tenm::plot_ellipsoid(x = x3, y=y3, z=z3 ,semiaxes= FALSE, col="#da9500", mve=T, add=TRUE)
+  # rgl::plot3d(x=x3,y=y3,z=z3, col="#da9500",add=T)
+  # rgl::rgl.snapshot(paste0("./species/mig_ENM/seasonaly/", spp.folder,"/ENM_3_", spp.names[s],".png"))
+  tenm::plot_ellipsoid(x = x4, y=y4, z=z4 ,semiaxes= FALSE, col="red", mve=T, add=TRUE)
+  # rgl::plot3d(x=x4,y=y4,z=z4, col="red",add=T)
+  # rgl::rgl.snapshot(paste0("./species/mig_ENM/seasonaly/", spp.folder,"/ENM_4_", spp.names[s],".png"))
   
-  save.image(paste0("./species/mig_ENM/monthly/", spp.folder,"/ENM_", spp.names[s],".Rdata"))
+  save.image(paste0("./species/mig_ENM/seasonaly/", spp.folder,"/ENM_s_", spp.names[s],".Rdata"))
   
   #delete all except tenm_mask and the background function from environment
   print(paste(spp.names[s], "done"))
   rm(list = setdiff(ls(), c("tenm_mask", "backg_CHcr", "spp.list", "spp.names", "tdf2swd2")))
 }
-
-
 
 # Projecting time-specific niche models -----------------------------------
 # # This section does not run... projection in geography
@@ -434,19 +387,137 @@ for (s in 66:67) { # listas c(65,68:85) # falta 66-84 porque termina rapido
 # terra::plot(suit_proj, main="Prediction")
 
 ### Reviewing model tables
-month.folder<-list.files("./species/mig_ENM/monthly/", full.names = T)
+season.folder<-list.files("./species/mig_ENM/seasonaly/", full.names = T)
 models.list<-list()
 
-for (x in 2:length(month.folder)) {
-  models.list[[x]]<-read.table(list.files(month.folder[x], pattern = "ENM_mods", full.names = T),
-                               sep="\t",
-                               dec=".",
-                               header=T)
+for (x in 1:length(season.folder)) {
+models.list[[x]]<-read.table(list.files(season.folder[x], pattern = "ENM_mods_s_", full.names = T),
+           sep="\t",
+           dec=".",
+           header=T)
 }
 
 do.call(rbind, models.list) |> 
-  filter(om_rate_train>0.05) |> 
+   filter(om_rate_train>0.05) |> 
   arrange(om_rate_train)
 
-lapply(models.list, names)=
-       
+
+# Elipsenm - Comparing niches ------------------
+
+# Installing and loading packages
+library(ellipsenm)
+
+season.folder
+
+x<-1
+mig_enm.s<-
+  list.files(season.folder[x], pattern=".txt$",full.names = T)
+mig_enm.s<-mig_enm.s[-grep("ENM_mods_s.", mig_enm.s)]
+
+elips.list<-list()
+for (m in 1:length(mig_enm.s)) {
+  occurrences <- read.table(mig_enm.s[m], 
+                            sep="\t",
+                            dec=".",
+                            header=T) |>  select(sp_name, lon, lat, prec, tmax, tmin)
+  ####
+  
+  bg_swd.list[[m]] |> 
+    write.table("./borrar/Sel_call_back.txt", sep="\t", dec=".", row.names = F)
+  
+  # 1. Leer shapefile de puntos
+  pts <- vect(bg_swd.list[[m]], geom=c("lon", "lat"))  # capa de puntos
+  
+  # 2. Crear raster vacío con extensión y resolución deseada
+  # (ajusta res() al tamaño de celda que quieras)
+  
+  r <- rast("./borrar/clima/capas_mean/1/prec_ame_5k_1_mean.tif")
+  
+  #r <- rast(ext(pts), res = 0.01, crs = crs(pts))
+  
+  # 3. Rasterizar usando una columna de atributos (ej: "valor")
+  prec.bg<-rasterize(pts, r, field = "prec")
+  tmax.bg<-rasterize(pts, r, field = "tmax")
+  tmin.bg<-rasterize(pts, r, field = "tmin")
+  
+  vars<- c(prec.bg, tmax.bg, tmin.bg)
+  names()
+  
+  ####
+  elips.list[[m]]<-overlap_object(data=occurrences, 
+                                  species="sp_name",
+                                  longitude="lon", 
+                                  latitude = "lat", 
+                                  method = "mve1",
+                                  level = 99)
+}
+
+#Creamos los elipsoides
+
+overlap_t<-
+  ellipsoid_overlap(elips.list[[1]], 
+                    elips.list[[2]], 
+                    elips.list[[3]],
+                    elips.list[[4]],
+                    overlap_type = "all",
+                    significance_test =F,
+                    iterations=2)
+overlap_t@full_overlap
+
+plot_overlap(overlap_t,
+            niches = c(1,2),
+            data = F,
+            background = F,
+            proportion = 1,
+            background_type = "full",
+            niche_col = rainbow(4),
+            data_col = rainbow(4))
+
+
+
+# Shoener's D and Hellinger's I -------------------------------------------
+
+library(ecospat)
+
+# -------------------------------------------------------------------
+# 1) PCA del espacio ambiental (PCA-env)
+#    'glob' será el "fondo" ambiental. Si no tienes background,
+#    una opción práctica es usar el pool de ambas especies.
+# -------------------------------------------------------------------
+x<-1
+
+occ1<-read.table(mig_enm.s[1], sep="\t", dec=".", header=T) |> select(prec, tmax, tmin)
+occ2<-read.table(mig_enm.s[2], sep="\t", dec=".", header=T) |> select(prec, tmax, tmin)
+occ3<-read.table(mig_enm.s[3], sep="\t", dec=".", header=T) |> select(prec, tmax, tmin)
+occ4<-read.table(mig_enm.s[4], sep="\t", dec=".", header=T) |> select(prec, tmax, tmin)
+
+
+glob_env <- bind_rows(occ1, occ2) %>% as.data.frame()
+
+# ecospat.pca.env calcula PCA usando 'glob' y proyecta sp1 y sp2
+
+z1 <- ecospat.grid.clim.dyn(
+  glob = abbg$env_bg |> select(prec, tmax),           # scores del fondo en PCA
+  glob1 = abbg$env_bg |> select(prec, tmax),          # mismo fondo
+  sp = abex.list[[1]]$temporal_df |> select(prec, tmax),          # scores de sp1 en PCA
+  R = 100)                   # resolución
+
+z2 <- ecospat.grid.clim.dyn(
+  glob = abbg$env_bg |> select(prec, tmax),           # scores del fondo en PCA
+  glob1 = abbg$env_bg |> select(prec, tmax),          # mismo fondo
+  sp = abex.list[[2]]$temporal_df |> select(prec, tmax),     # scores de sp1 en PCA
+  R = 100)                   # resolución
+
+
+# -------------------------------------------------------------------
+# 3) Solapamiento de nicho: Schoener's D
+# -------------------------------------------------------------------
+ov <- ecospat.niche.overlap(z1, z2, cor = TRUE)  # retorna D (y Hellinger I si aplica)
+ov["D"]
+
+
+ecospat.plot.niche.dyn(z1, z2, quant=0.25, interest=1,
+                       title= "Niche overlap S1 vs S2",
+                       name.axis1="Prec", name.axis2="Tmax")
+
+
