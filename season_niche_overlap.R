@@ -14,7 +14,7 @@ season.folder<-list.files("./species/mig_ENM/seasonaly/", full.names = T)
 combs.s<-data.frame(a= rep(1:3, 3:1), b= unlist(lapply(2:4, function(i) i:4)))
 
 data.ovrlp.list<-list()
-# f<-1
+# f<-65
 for (f in 1:length(season.names)) { #1:length(season.names)
 
 # Cargo el Rdata que contiene los ENM y el background ---------------------
@@ -26,7 +26,7 @@ for (f in 1:length(season.names)) { #1:length(season.names)
   bg_swd.list<-temp_env$bg_swd.list
   abex.list<-temp_env$abex.list
   
-  dir.create(paste0(season.folder[f], "/S_overlap"))
+  # dir.create(paste0(season.folder[f], "/S_overlap"))
   
   data.overlap <- data.frame(
     spp = NA,
@@ -54,7 +54,7 @@ for (f in 1:length(season.names)) { #1:length(season.names)
     climafin2<-bg_swd.list[[combs.s[x,2]]] |> select(lon, lat, prec, tmax, tmin) # febrero
     #head(climafin2)
 
-    # 1. Crear un perfil climatico de ambas especies 
+    # 1. Crear un perfil climatico de ambos climas 
     ambosclimas<- na.omit(rbind(climafin1,climafin2))
 
 
@@ -466,6 +466,7 @@ for (f in 1:103) { #1 Y 12 length(season.folder)
 #                                        background = F, background_type = "full", 
 #                                        background_col = viridis::viridis, proportion = 1,
 #                                        change_labels = F, legend = T)
+
 
 
 
