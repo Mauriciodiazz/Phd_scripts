@@ -17,7 +17,8 @@ for (x in 1:length(df.m)) {
   list.s[[x]] <- b
 }
 
-data.ovrlp.m <- do.call(rbind, list.m)
+data.ovrlp.m <- do.call(rbind, list.m) |> 
+  mutate(spp = spp |> str_remove_all("_ENMm"))
 data.ovrlp.s <- do.call(rbind, list.s)
 
 # write.table(data.ovrlp.m, "./species/mig_ENM/overlaps_tables/data.ovrlp_m_df.txt",
@@ -188,14 +189,94 @@ data.ovrlp.m |>
         axis.ticks.y = element_blank(),
         axis.text.y = element_blank())
 
-ggsave(file = "./outputs/images/ieca.png",
+ggsave(file = "./outputs/images/ieca_new.png",
        width = 10,
        height = 7,
        scale=3,
        units ="cm")
 
 
-# Pruebas con las familias de los bichos
+# Bruenniman graphs -------------------------------------------------------
+library(tidyverse)
+# months
+# pca.path <- list.files("./species/mig_ENM/overlaps_tables/PCA_m/", full.names = T)
+# pca.names <- basename(pca.path) |> str_remove_all("_m_PCA.txt")
+
+# seasons
+pca.path <- list.files("./species/mig_ENM/overlaps_tables/PCA_s/", full.names = T)
+pca.names <- basename(pca.path) |> str_remove_all("_s_PCA.txt")
+# basename(pca.path[1])
+
+# x <- 39
+for (x in 1:length(pca.path)) {
+  
+spp <- read.table(pca.path[x],header=T, sep='\t', dec='.') |> 
+  filter(str_starts(elip, "abex_"))
+
+
+#---
+# Estos graficos de densidad calculan la probabilidad y el 0.1 es la mas externa. Agrupa esos valores y realiza un CH. por eso queda mocho
+spp |> 
+  filter(elip =="abex_Lei_criss_3") |> 
+  ggplot(aes(x=Axis1, y=Axis2)) + 
+  geom_point() +
+  stat_density2d(geom="polygon", alpha=0.10, na.rm = T, contour_var = "ndensity", breaks = c(seq(0.1,0.9, by=0.05)))
+
+#---
+
+# pca.fig <-
+  ggplot()+
+  stat_density2d(data=spp,
+                 # filter(elip == paste0("abex_", pca.names[x], "_1") | elip == paste0("abex_", pca.names[x], "_2")),
+                 aes(x = Axis1,y = Axis2, color=elip, fill=elip), 
+                 geom="polygon", alpha=0.10, na.rm = T, contour_var = "ndensity")+
+    theme_bw()+
+    labs(title=pca.names[x] |> str_replace("_", ". "),x="PC1", y="PC2")+
+    geom_hline(yintercept=0, linetype="dashed", color = "gray30", linewidth=0.5,alpha=0.70)+
+    geom_vline(xintercept=0, linetype="dashed", color = "gray30", linewidth=0.5, alpha=0.70)+
+  
+  # Months  
+  # scale_fill_manual(values=c("#4a72b0", "#4a72b0", "#6ea96e", "#6ea96e", "#6ea96e", "#da9500", "#da9500", "#da9500", "#294029","#294029","#294029", "#4a72b0")) +
+  #   scale_color_manual(values=c("#4a72b0", "#4a72b0", "#6ea96e", "#6ea96e", "#6ea96e", "#da9500", "#da9500", "#da9500", "#294029","#294029","#294029", "#4a72b0")) +
+  
+# Seasons
+    scale_fill_manual(values=c("#4a72b0", "#6ea96e", "#da9500", "#294029")) +
+    scale_color_manual(values=c("#4a72b0", "#6ea96e", "#da9500", "#294029")) +
+    theme(legend.position="none")
+
+ggsave(pca.fig,
+       file = paste0("./outputs/images/PCA/S_", pca.names[x] ,"_PCA.png"),
+       width = 5,
+       height = 5,
+       scale=3,
+       units ="cm")
+
+print(paste(basename(pca.path[x]) |> str_remove("_s_PCA.txt"), x, "done"))
+
+}
+  
+
+  #----
+dens <- 
+  ggplot( data = spp |> filter(str_starts(elip, "abex_")),
+  aes(x = Axis1, y = Axis2, color=elip, fill=elip)) +
+  stat_density_2d( aes(fill = after_stat(level)), geom = "polygon")
+
+dens_data <- ggplot_build(dens)$data[[1]]
+
+outer_poly <- dens_data %>%
+  filter(level == min(level))
+
+ggplot() +
+  geom_polygon(
+    data = outer_poly,
+    aes(x, y, group = group),
+    fill = "steelblue",
+    alpha = 0.15)
+
+#----
+
+ # Pruebas con las familias de los bichos
 spp.fl <- read.table('./inputs/final-spp-list.txt', header=T, sep='\t', dec='.') |> 
   separate(Scientific.Name, into = c('gen', 'sp'), sep = ' ', remove=F) |> 
   mutate(spp=paste(str_sub(gen, 1,3), str_sub(sp, 1,5), sep = '_')) |> 
