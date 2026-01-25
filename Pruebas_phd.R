@@ -461,12 +461,12 @@ summary(a.lm)
   cor(method="spearman")
 
 #### minimos y maximos ####
+  
   library(ecospat)
   library(terra)
   library(sf)
   library(tidyverse)
   
-
   # Path de las especies
   season.names<-list.files("./species/mig_ENM/seasonaly/", full.names = F) |> str_remove("_ENMs")
   season.folder<-list.files("./species/mig_ENM/seasonaly/", full.names = T)
@@ -474,33 +474,36 @@ summary(a.lm)
   # Tabla que organiza el bucle (combinación 1 entre 4)
   combs.s<-data.frame(a= rep(1:3, 3:1), b= unlist(lapply(2:4, function(i) i:4)))
   
+  # # ---- borrar
+  # 
+  # a <- data.frame(spp=NA, dif=NA)
+  # a.list <- list()
+  # #---
+  
   data.ovrlp.list<-list()
   
-  #--- borrar
-  table.borr <- data.frame(spp=NA, dif=NA)
-  table.borr.list <- list()
-  #---
+  # f<-103
+  for (f in c(1:21,25:103)) { #1:length(season.names)
   
-  # f<-65
-  for (f in 84:length(season.names)) { #1:length(season.names)
-    
-    # Cargo el Rdata que contiene los ENM y el background ---------------------
+    # 1. Cargo el Rdata que contiene los ENM y el background ---------------------
     
     temp_env <- new.env() # Esto me crea un ambiente en un conjunto temporal
     load(list.files(season.folder[f], pattern="*.Rdata$", full.names = T), envir = temp_env)
     
     # Objetos de temp_env que se van a usar
-    # bg_swd.list<-temp_env$bg_swd.list
+    
     abex.list<-temp_env$abex.list
     
     abbg.list <- list()
     for(x in 1:length(temp_env$abbg.list)) { 
       abbg.list[[x]] <-  temp_env$abbg.list[[x]]$env_bg
       names(abbg.list)[x]<-paste0("abbg_", season.names[f], "_", x)
-                         }
-
-    # dir.create(paste0(season.folder[f], "/S_overlap"))
+    }
     
+    # Se crea el directorio donde se guardan los datos
+    dir.create(paste0(season.folder[f], "/S_overlap"))
+    
+    # Recipiente de los datos
     data.overlap <- data.frame(
       spp = NA,
       overlap=NA,
@@ -515,16 +518,18 @@ summary(a.lm)
       p.stabi = NA,
       p.unfil = NA)
     
-    # PCA total (toda la especie) ---------------------------------------------
+    # 2. PCA total (toda la especie) ---------------------------------------------
     
-    # Background
+    ##### 2.1 Background ----------------------------------------------------------
+
     bgd <- 
       do.call(rbind, abbg.list) |> 
       select(lon, lat, prec, tmax, tmin, ID_YEAR) |> 
       rownames_to_column(var = "elip") |> 
       mutate(elip = elip |> str_remove("\\..*"))
-    
-    # Ambiente
+
+
+    ##### 2.2 Ambiente ------------------------------------------------------------
     env2 <- list()
     
     # Extracting environmental values from temporal data frame
@@ -538,6 +543,8 @@ summary(a.lm)
       select(lon, lat, prec, tmax, tmin, elip, layers_path) |> 
       rename("ID_YEAR"=layers_path)
     
+    ##### 3. Construcción del PCA ----------------------------------------------------
+
     #  Bind background and environmental dataframes
     data <- rbind.data.frame(bgd[,c(1,4:7)], env[,c(6,3:5,7)])
     
@@ -568,49 +575,58 @@ summary(a.lm)
       dplyr::summarise(min.a1=min(Axis1), 
                        max.a1=max(Axis1), 
                        min.a2=min(Axis2), 
-                       max.a2=max(Axis2), .by = elip)
+                       max.a2=max(Axis2), .by = elip) |> 
+      arrange(elip)
     
     min.max.sp <- pca.cal2 |> 
       filter(str_starts(elip, "abex_")) |> 
       dplyr::summarise(min.a1=min(Axis1), 
                        max.a1=max(Axis1), 
                        min.a2=min(Axis2), 
-                       max.a2=max(Axis2), .by = elip)
+                       max.a2=max(Axis2), .by = elip) |> 
+      arrange(elip)
     
     min.max.logic <- data.frame( 
     min.a1 = min.max.bg$min.a1 > min.max.sp$min.a1,
+    max.a1 = min.max.bg$max.a1 < min.max.sp$max.a1,
     min.a2 = min.max.bg$min.a2 > min.max.sp$min.a2,
-    max.a2 = min.max.bg$max.a1 < min.max.sp$max.a1,
     max.a2 = min.max.bg$max.a2 < min.max.sp$max.a2) |> as.matrix()
-    min.max.logic <- data.frame( 
-    min.a1 = c(FALSE,  T, FALSE, T),
-    min.a2 = min.max.bg$min.a2 > min.max.sp$min.a2,
-    max.a2 = min.max.bg$max.a1 < min.max.sp$max.a1,
-    max.a2 = min.max.bg$max.a2 < min.max.sp$max.a2) |> as.matrix()
-    
+
     if (any(min.max.bg$min.a1 > min.max.sp$min.a1) ||
         any(min.max.bg$min.a2 > min.max.sp$min.a2) ||
         any(min.max.bg$max.a1 < min.max.sp$max.a1) ||
         any(min.max.bg$max.a2 < min.max.sp$max.a2)) {
-
-     elips.prob <- 
+      
+      elips.prob <- 
        which(min.max.logic, arr.ind = TRUE) |> 
         as_tibble() |> 
         mutate(elip = bg_name[row]) |>  # Mapeamos el ID original
         select(elip) |> 
         pull() |> 
         unique()
+      
+      print(data.frame(which=paste(length(elips.prob), "correct needed")))
+      
+  #    ## --- borrar
+  #    # Esto es para crear una tabla que me diga donde hay estos conflictos
+  #    a.list[[f]] <- data.frame(spp=elips.prob, ID=rep(f, length(elips.prob)))
+  #   }
+  #   print(paste(season.names[f], f, "done"))
+  # }
+  # do.call(rbind, a.list) |> 
+  #   write.table("./borrar/bg_conflict.S.txt", sep="\t", dec=".", row.names=F)
+  #    elips.prob <- c("abbg_Vir_solit_3", "abbg_Vir_solit_2")
+  #    
+  #    ## ---
      
+      # Este bucle identifica los espacios donde hay conflictos (elips.prob) y hace la corrección para cada conjunto de       datos. Corta los raster correspondiente al tiempo de cada registro, calcula el min y el max y obtiene un min-max        final que se añade a bgd.  
+     # e <- 1
      for (e in 1:length(elips.prob)) {
        
       bgd.filter <-  bgd |> 
          filter(elip == elips.prob[e])
 
-      
-      # 1. Generar el buffer 
-      # 50 pixeles de radio de 0.045 de resolución. Pero el buffer no es redondo, es cuadrado
-      
-      # 1.2. Construcción de los Cuadrados (Polígonos)
+      # 1. Construcción de los Cuadrados (Polígonos)
       # La lógica es: xmin, ymin -> xmax, ymin -> xmax, ymax -> xmin, ymax -> cerrar
       eme.t <-
         env |>
@@ -636,16 +652,18 @@ summary(a.lm)
       
       dat.path <- 
         pca.cal2 |> 
-        filter(elip == bg_name[combs.s[x,1]]) |> 
+        filter(elip == elips.prob[e]) |> 
         select(ID_YEAR) |> 
         unique() |> pull()
+      
+      print(paste(elips.prob[e], length(dat.path), "rast paths"))
       
       # 2.1 Abrir raster de cada path
       
       min.max.list <- list()
       
       # r <- 1L
-      for (r in 1:length(dat.path)) {
+      for (r in 1:length(dat.path)) {# length(dat.path)
         r.stack <- rast(list.files(dat.path[r] |> str_replace("E:", "D:"), full.names = T))
         
         # Extracción de los valores dentro de M
@@ -682,39 +700,131 @@ summary(a.lm)
                 tmin=min.max.df$tmin[2],
                 ID_YEAR=bgd.filter$ID_YEAR[1])
       
-      # REVISAR SI HAY PROBLEMA CUANDO ELIPS.PROB TIENE MAS DE UN VALOR. NECESITO QUE SE GUARDEN LOS CAMBIOS, ES DECIR, QUE SI EN E=1 SE HIZO UN CAMBIO QUE LO GUARDE SI E=2
-      bgd2 <- bgd |> 
+      bgd <- bgd |> 
         filter(elip != elips.prob[e]) |>
-        rbind(bgd.filter2) |>
+        bind_rows(bgd.filter2) |>
         tibble()
       
-      #  Bind background and environmental dataframes
-      data <- rbind.data.frame(bgd2[,c(1,4:7)], env[,c(6,3:5,7)])
-      
-      # Weight vector. Occurrences= 0 and background (survey sites)=1
-      w <- c(rep(1, nrow(bgd2)), rep(0, nrow(env)))
-      
-      pca.cal <- ade4::dudi.pca(data[,2:4],
-                                row.w = w,
-                                center = T,
-                                scale = T,
-                                scannf = F,
-                                nf = 2) # Produce solo dos PC
-      # Ellipsoid ID  
-      pca.cal2 <- pca.cal$li |> 
-        mutate(elip = data$elip,
-               ID_YEAR = data$ID_YEAR)
+      print(paste(elips.prob[e], "correction done"))
+       }
+     
 
-     }
+      # 4. Calculo de PCA corregido (bgd) ------------------------------------------
       
+    
+     #  Bind background and environmental dataframes
+     data <- rbind.data.frame(bgd[,c(1,4:7)], env[,c(6,3:5,7)])
+
+     # Weight vector. Occurrences= 0 and background (survey sites)=1
+     w <- c(rep(1, nrow(bgd)), rep(0, nrow(env)))
+     
+     pca.cal <- ade4::dudi.pca(data[,2:4],
+                               row.w = w,
+                               center = T,
+                               scale = T,
+                               scannf = F,
+                               nf = 2) # Produce solo dos PC
+     # Ellipsoid ID  
+     pca.cal2 <- pca.cal$li |> 
+       mutate(elip = data$elip,
+              ID_YEAR = data$ID_YEAR)
+     
+     # Prueba de que funcionó
+
+     min.max.bg <- pca.cal2 |>
+       filter(str_starts(elip, "abbg_")) |>
+       dplyr::summarise(min.a1=min(Axis1),
+                        max.a1=max(Axis1),
+                        min.a2=min(Axis2),
+                        max.a2=max(Axis2), .by = elip) |> 
+       arrange(elip)
+
+     min.max.sp <- pca.cal2 |>
+       filter(str_starts(elip, "abex_")) |>
+       dplyr::summarise(min.a1=min(Axis1),
+                        max.a1=max(Axis1),
+                        min.a2=min(Axis2),
+                        max.a2=max(Axis2), .by = elip) |> 
+       arrange(elip)
+
+     min.max.logic <- data.frame(
+       min.a1 = min.max.bg$min.a1 > min.max.sp$min.a1,
+       max.a1 = min.max.bg$max.a1 < min.max.sp$max.a1,
+       min.a2 = min.max.bg$min.a2 > min.max.sp$min.a2,
+       max.a2 = min.max.bg$max.a2 < min.max.sp$max.a2) |> as.matrix()
+     
+     # Si no funciona, entonces esos puntos extremos se eliminan de los registros
+     
+     if (any(min.max.bg$min.a1 > min.max.sp$min.a1) ||
+         any(min.max.bg$max.a1 < min.max.sp$max.a1) ||
+         any(min.max.bg$min.a2 > min.max.sp$min.a2) ||
+         any(min.max.bg$max.a2 < min.max.sp$max.a2)) {
+
+       print(paste("records need correction"))
+       
+       limites_bg.pca <- 
+         pca.cal2 |> 
+         group_by(elip) |> 
+         summarise(across(
+           c(Axis1, Axis2), 
+           list(min = \(x) min(x, na.rm = TRUE), 
+                max = \(x) max(x, na.rm = TRUE)),
+           .names = "{.col}_{.fn}" # Esto genera nombres como tmin_min, tmin_max, etc.
+         )) |> 
+         filter(str_starts(elip, "abbg_")) |> 
+         mutate(elip2 = elip |> str_remove("abbg_")) |> 
+         select(!elip)
+       
+       pca.cal2 <- 
+       pca.cal2 |> 
+         tibble() |> 
+         filter(str_starts(elip, "abex_")) |> 
+         mutate(elip2 = elip |> str_remove("abex_")) |> 
+         left_join(limites_bg.pca, by = "elip2") |> 
+           # Para cada variable, encerramos el valor entre su min y max de categoría
+         mutate(Axis1 = pmax(pmin(Axis1, Axis1_max), Axis1_min),
+                Axis2 = pmax(pmin(Axis2, Axis2_max), Axis2_min)) |> 
+         # 3. Limpieza: eliminamos las columnas de límites que ya no necesitamos
+         select(Axis1, Axis2, elip, ID_YEAR) |> 
+         rbind(pca.cal2 |> filter(str_starts(elip, "abbg_")))
+       
+
+       # # Prueba de que funcionó x2
+       # 
+       # min.max.bg <- pca.cal2 |>
+       #   filter(str_starts(elip, "abbg_")) |>
+       #   dplyr::summarise(min.a1=min(Axis1),
+       #                    max.a1=max(Axis1),
+       #                    min.a2=min(Axis2),
+       #                    max.a2=max(Axis2), .by = elip) |> 
+       #   arrange(elip)
+       # 
+       # min.max.sp <- pca.cal2 |>
+       #   filter(str_starts(elip, "abex_")) |>
+       #   dplyr::summarise(min.a1=min(Axis1),
+       #                    max.a1=max(Axis1),
+       #                    min.a2=min(Axis2),
+       #                    max.a2=max(Axis2), .by = elip) |> 
+       #   arrange(elip)
+       # 
+       # min.max.logic <- data.frame(
+       #   min.a1 = min.max.bg$min.a1 > min.max.sp$min.a1,
+       #   max.a1 = min.max.bg$max.a1 < min.max.sp$max.a1,
+       #   min.a2 = min.max.bg$min.a2 > min.max.sp$min.a2,
+       #   max.a2 = min.max.bg$max.a2 < min.max.sp$max.a2) |> as.matrix()
+       
+     }
+
+     
     } 
     
-    # Select PCA values for each ellipsoid
     
+    # 5. Select PCA values for each ellipsoid ------------------------------------
+
     # x<-1
     for (x in 1:nrow(combs.s)) {
       
-      # PCA climatic scores  ----------------------------------------------------
+      ##### 5.1 PCA climatic scores  ----------------------------------------------------
       
       # Backgrounds
       scores.clima1 <- pca.cal2 |> 
@@ -725,18 +835,16 @@ summary(a.lm)
         filter(elip == bg_name[combs.s[x,2]]) |> 
         select(!c(elip, ID_YEAR))
       
-      # scores.clima12 <- rbind(scores.clima1, scores.clima2) |> 
-      #   add_row(Axis1=min(pca.cal2$Axis1), Axis2=min(pca.cal2$Axis2)) |> 
-      #   add_row(Axis1=max(pca.cal2$Axis1), Axis2=max(pca.cal2$Axis2))
+      scores.clima12 <- rbind(scores.clima1, scores.clima2)
       
       # Environments
       scores.sp1a <- pca.cal2 |> 
         filter(elip == abex_name[combs.s[x,1]]) |> 
-        select(!elip)
+        select(!c(elip, ID_YEAR))
       
       scores.sp2b <- pca.cal2 |> 
         filter(elip == abex_name[combs.s[x,2]]) |> 
-        select(!elip)
+        select(!c(elip, ID_YEAR))
       
       #  # Variable contribution to PCA analysis
       #  contribucion<- ecospat.plot.contrib(contrib=pca.cal$co,
@@ -838,20 +946,14 @@ summary(a.lm)
       print(paste(basename(season.folder[f]), combs.s[x,1], "v", combs.s[x,2], "ready"))
     }
     
+    write.table(data.overlap, 
+                 paste0("./species/mig_ENM/overlaps_tables/B_ovl_season/",
+                        season.names[f],
+                        "_s_ovl.txt"), sep = "\t", dec = ".", row.names = F)
+    data.ovrlp.list[[f]] <- data.overlap
+    
     print(paste(basename(season.folder[f]), f, "done"))
-    
-    write.table(data.overlap,
-                paste0("./species/mig_ENM/overlaps_tables/season/", season.names[f], "_s_ovl.txt"),
-                sep="\t", dec = ".", row.names=F)
-    
-    
-    data.ovrlp.list[[f]]<-data.overlap
-    
     rm(list = setdiff(ls(), c("season.names", "season.folder", "combs.s", "data.ovrlp.list")))
+    
   }
 
-
-a <- do.call(rbind, minmax.list)
-a |> 
-  select(!combs) |> 
-  distinct()
