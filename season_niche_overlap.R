@@ -14,7 +14,7 @@ season.folder<-list.files("./species/mig_ENM/seasonaly/", full.names = T)
 combs.s<-data.frame(a= rep(1:3, 3:1), b= unlist(lapply(2:4, function(i) i:4)))
 
 data.ovrlp.list<-list()
-# f<-65
+# f<-7
 for (f in 1:length(season.names)) { #1:length(season.names)
 
 # Cargo el Rdata que contiene los ENM y el background ---------------------
@@ -248,8 +248,11 @@ combs.s<-data.frame(a= rep(1:3, 3:1), b= unlist(lapply(2:4, function(i) i:4)))
 
 data.ovrlp.list<-list()
 
-# f<-103
-for (f in c(1:21,25:103)) { #1:length(season.names)
+# registros borrados en los filtros
+spp.fil <- data.frame(spp=NA, fil1=NA, fill2=NA)
+
+# f <- 7
+for (f in 1:length(season.names)) { #1:length(season.names)
   
   # 1. Cargo el Rdata que contiene los ENM y el background ---------------------
   
@@ -267,7 +270,7 @@ for (f in c(1:21,25:103)) { #1:length(season.names)
   }
   
   # Se crea el directorio donde se guardan los datos
-  dir.create(paste0(season.folder[f], "/S_overlap"))
+  # dir.create(paste0(season.folder[f], "/S_overlap"))
   
   # Recipiente de los datos
   data.overlap <- data.frame(
@@ -358,6 +361,9 @@ for (f in c(1:21,25:103)) { #1:length(season.names)
     min.a2 = min.max.bg$min.a2 > min.max.sp$min.a2,
     max.a2 = min.max.bg$max.a2 < min.max.sp$max.a2) |> as.matrix()
   
+  # ----
+  spp.fil[f,1] <- season.names[f]
+    
   if (any(min.max.bg$min.a1 > min.max.sp$min.a1) ||
       any(min.max.bg$min.a2 > min.max.sp$min.a2) ||
       any(min.max.bg$max.a1 < min.max.sp$max.a1) ||
@@ -430,7 +436,15 @@ for (f in c(1:21,25:103)) { #1:length(season.names)
       
       # r <- 1L
       for (r in 1:length(dat.path)) {# length(dat.path)
-        r.stack <- rast(list.files(dat.path[r] |> str_replace("E:", "D:"), full.names = T))
+        
+        # Mi pc
+        # r.stack <- rast(list.files(dat.path[r] |> 
+        #                              str_replace("E:", "D:"), 
+        #                            full.names = T))
+        
+        # PC del lab
+        r.stack <- rast(list.files(dat.path[r], 
+                                   full.names = T))
         
         # Extracción de los valores dentro de M
         min.max.list[[r]] <- 
@@ -495,6 +509,12 @@ for (f in c(1:21,25:103)) { #1:length(season.names)
       mutate(elip = data$elip,
              ID_YEAR = data$ID_YEAR)
     
+    #---
+    spp.fil[f,2] <- pca.cal2 |> 
+      filter(str_starts(elip, "abex_")) |> 
+      nrow()
+    #---
+    
     # Prueba de que funcionó
     
     min.max.bg <- pca.cal2 |>
@@ -526,7 +546,7 @@ for (f in c(1:21,25:103)) { #1:length(season.names)
         any(min.max.bg$min.a2 > min.max.sp$min.a2) ||
         any(min.max.bg$max.a2 < min.max.sp$max.a2)) {
       
-      print(paste("records need correction"))
+      print(paste("records for need correction"))
       
       limites_bg.pca <- 
         pca.cal2 |> 
@@ -554,6 +574,11 @@ for (f in c(1:21,25:103)) { #1:length(season.names)
         select(Axis1, Axis2, elip, ID_YEAR) |> 
         rbind(pca.cal2 |> filter(str_starts(elip, "abbg_")))
       
+      #---
+      spp.fil[f,3] <- pca.cal2 |> 
+        filter(str_starts(elip, "abex_")) |> 
+        nrow()
+      #---
       
       # # Prueba de que funcionó x2
       # 
@@ -584,6 +609,13 @@ for (f in c(1:21,25:103)) { #1:length(season.names)
     
   } 
   
+  write.table(pca.cal2,
+              paste0("./species/mig_ENM/overlaps_tables/PCA_s/", season.names[f] |> str_remove_all("_ENMm"),
+                     "_s_PCA.txt"),
+              sep="\t", dec = ".", row.names=F)
+  # # -----
+  # } # final "prematuro" del bucle inicial
+  # # -----
   
   # 5. Select PCA values for each ellipsoid ------------------------------------
   

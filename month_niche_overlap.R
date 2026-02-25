@@ -248,7 +248,7 @@ combs.m<-data.frame(a= rep(1:11, 11:1), b= unlist(lapply(2:12, function(i) i:12)
 data.ovrlp.list<-list()
 
 # f<-97
-for (f in c(1:21,25:103)) { #1:length(month.names)
+for (f in 1:length(month.names)) { #1:length(month.names)
   
   # 1. Cargo el Rdata que contiene los ENM y el background ---------------------
   
@@ -433,7 +433,15 @@ for (f in c(1:21,25:103)) { #1:length(month.names)
       
       # r <- 1L
       for (r in 1:length(dat.path)) {# length(dat.path)
-        r.stack <- rast(list.files(dat.path[r] |> str_replace("E:", "D:"), full.names = T))
+        
+        # Mi pc
+        # r.stack <- rast(list.files(dat.path[r] |> 
+        #                              str_replace("E:", "D:"), 
+        #                            full.names = T))
+        
+        # PC del lab
+        r.stack <- rast(list.files(dat.path[r], 
+                                   full.names = T))
         
         # Extracción de los valores dentro de M
         min.max.list[[r]] <- 
@@ -533,7 +541,7 @@ for (f in c(1:21,25:103)) { #1:length(month.names)
         any(min.max.bg$min.a2 > min.max.sp$min.a2) ||
         any(min.max.bg$max.a2 < min.max.sp$max.a2)) {
       
-      print(paste("records need correction"))
+      print(paste("records needs for correction"))
       
       limites_bg.pca <- 
         pca.cal2 |> 
@@ -548,7 +556,7 @@ for (f in c(1:21,25:103)) { #1:length(month.names)
         mutate(elip2 = elip |> str_remove("abbg_")) |> 
         mutate(ID= str_extract_all(elip2, "[0-9]+\\.?[0-9]*") |> as.numeric()) |> 
         arrange(ID) |> 
-        select(!ID, elip2)
+        select(!c(ID, elip))
 
       pca.cal2 <- 
         pca.cal2 |> 
@@ -570,7 +578,7 @@ for (f in c(1:21,25:103)) { #1:length(month.names)
       #   dplyr::summarise(min.a1=min(Axis1),
       #                    max.a1=max(Axis1),
       #                    min.a2=min(Axis2),
-      #                    max.a2=max(Axis2), .by = elip) |> 
+      #                    max.a2=max(Axis2), .by = elip) |>
       #   arrange(elip)
       # 
       # min.max.sp <- pca.cal2 |>
@@ -578,7 +586,7 @@ for (f in c(1:21,25:103)) { #1:length(month.names)
       #   dplyr::summarise(min.a1=min(Axis1),
       #                    max.a1=max(Axis1),
       #                    min.a2=min(Axis2),
-      #                    max.a2=max(Axis2), .by = elip) |> 
+      #                    max.a2=max(Axis2), .by = elip) |>
       #   arrange(elip)
       # 
       # min.max.logic <- data.frame(
@@ -592,7 +600,14 @@ for (f in c(1:21,25:103)) { #1:length(month.names)
     
   } 
   
-  
+  write.table(pca.cal2,
+              paste0("./species/mig_ENM/overlaps_tables/PCA_m/", month.names[f],
+                     "_m_PCA.txt"),
+              sep="\t", dec = ".", row.names=F)
+#   # -----
+# } # final "prematuro" del bucle inicial
+# # -----
+
   # 5. Select PCA values for each ellipsoid ------------------------------------
   
   # x<-1
