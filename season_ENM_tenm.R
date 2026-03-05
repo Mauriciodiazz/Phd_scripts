@@ -330,6 +330,7 @@ for (s in 1:20) { #length(spp.list)
   rm(list = setdiff(ls(), c("tenm_mask", "backg_CHcr", "spp.list", "spp.names", "tdf2swd2")))
   
 }
+
   # Plotting ellipsoid ------------------------------------------------------
   season.folder<-list.files("./species/mig_ENM/seasonaly/", full.names = T)
   for (x in 1:length(season.folder)) {

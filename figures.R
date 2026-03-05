@@ -1,8 +1,9 @@
-### Figuras
-# comparando monhts y season ----------------------------------------------
+### Figures and formal analysis
+
 library(tidyverse)
 
-# Broennimann
+# Broenniman results ------------------------------------------------------
+
 list.m<-list()
 list.s<-list()
 df.m <- list.files("./species/mig_ENM/overlaps_tables/B_ovl_month/", full.names=T)
@@ -26,10 +27,10 @@ data.ovrlp.s <- do.call(rbind, list.s) |>
 #             sep="\t", dec = ".", row.names=F)
 
 data.ovrlp.m<-read.table("./species/mig_ENM/overlaps_tables/data.ovrlp_m_df.txt",
-                          sep="\t", dec = ".", header=T)
+                         sep="\t", dec = ".", header=T)
 
 data.ovrlp.s<-read.table("./species/mig_ENM/overlaps_tables/data.ovrlp_S_df.txt",
-                          sep="\t", dec = ".", header=T)
+                         sep="\t", dec = ".", header=T)
 
 # ## Cargar valores de jaccard
 # # Month
@@ -63,7 +64,7 @@ sp.ord <-
   spp.fl$Scientific.Name[c(73,83,76,79,81,82)]
 # "Set_chrys" "Set_stria" "Set_magno" "Set_palma" "Set_petec" "Set_rutic"
 
-eca.fct <- data.ovrlp.m |> 
+esa.fct <- data.ovrlp.m |> 
   # Solo para parulidos
   filter(str_starts(spp, 'Set_')) |> 
   summarise(mean=mean(obs.D), .by=c(spp)) |> 
@@ -77,7 +78,7 @@ m<-
   relocate(Order, Family, Scientific.Name) |> 
   mutate(overlap = factor(overlap, levels = unique(overlap)),
          color_flag = ifelse(p.D > 0.05, "p>0.05", "p<0.05"),
-         spp = factor(spp, levels=eca.fct),
+         spp = factor(spp, levels=esa.fct),
          overlap2 = str_replace_all(overlap, c('m1_' = 'Ene_', 
                                                'm2' = 'Feb', 
                                                'm3' = 'Mar',
@@ -93,8 +94,8 @@ m<-
                                                '_' = ' vs '))) |>  
   mutate(overlap2 = factor(overlap2, levels = unique(overlap2))) |> 
   # Solo graficar 6 especies, de manera ilustrativa y ajustarles ese orden
-  filter(spp==eca.fct[1] | spp==eca.fct[2] | spp==eca.fct[9] | 
-           spp==eca.fct[16] | spp==eca.fct[17] | spp==eca.fct[18]) |> 
+  filter(spp==esa.fct[1] | spp==esa.fct[2] | spp==esa.fct[9] | 
+           spp==esa.fct[16] | spp==esa.fct[17] | spp==esa.fct[18]) |> 
   mutate(Scientific.Name = factor(Scientific.Name, levels=sp.ord)) |> 
   ggplot(aes(x=obs.D, y=fct_rev(overlap2), color=color_flag)) +
   geom_point(size=2) +
@@ -135,10 +136,10 @@ s<-
   relocate(Order, Family, Scientific.Name) |> 
   mutate(overlap=factor(overlap, levels = unique(overlap)),
          color_flag=ifelse(p.D > 0.05, "p>0.05", "p<0.05"),
-         spp=factor(spp, levels=eca.fct)) |> 
+         spp=factor(spp, levels=esa.fct)) |> 
   # Solo graficar 6 especies, de manera ilustrativa y ajustarles ese orden
-  filter(spp==eca.fct[1] | spp==eca.fct[2] | spp==eca.fct[9] | 
-           spp==eca.fct[16] | spp==eca.fct[17] | spp==eca.fct[18]) |> 
+  filter(spp==esa.fct[1] | spp==esa.fct[2] | spp==esa.fct[9] | 
+           spp==esa.fct[16] | spp==esa.fct[17] | spp==esa.fct[18]) |> 
   mutate(Scientific.Name = factor(Scientific.Name, levels=sp.ord)) |> 
   #  summarise(n=n(), .by=c(color_flag, spp))
   ggplot(aes(x=obs.D, y=fct_rev(overlap), color=color_flag)) +
@@ -214,10 +215,10 @@ ggsave(file = "./outputs/images/ovals_num.png",
        units ="cm")
 
 
-
-
 # Anual Environmental Coincidence Average ---------------------------------------
 library(harmonicmeanp)
+
+## P-value harmonic mean  -------------------------------------------------------
 
 l <- list()
 nam <- data.ovrlp.m$spp |> unique()
@@ -228,54 +229,191 @@ for(x in 1:103){
   p.m <- data.ovrlp.m |> 
     filter(spp==nam[x]) |> 
     pull(p.D)
-  sp.df.m[x,2] <- harmonicmeanp::p.hmp(p.m, L=length(p))[1]
+  sp.df.m[x,2] <- harmonicmeanp::p.hmp(p.m, L=length(p.m))[1]
   
   p.s <- data.ovrlp.s |> 
     filter(spp==nam[x]) |> 
     pull(p.D)
-  sp.df.s[x,2] <- harmonicmeanp::p.hmp(p.s, L=length(p))[1]
-  }
-
+  sp.df.s[x,2] <- harmonicmeanp::p.hmp(p.s, L=length(p.s))[1]
+}
 
 s.ps <- data.ovrlp.s |> 
-  summarise(eca=mean(obs.D), 
-            sd.eca=sd(obs.D), .by=c(spp)) |> 
+  summarise(esa=mean(obs.D), 
+            sd.esa=sd(obs.D), .by=c(spp)) |> 
   left_join(sp.df.s, by="spp") |> 
   mutate(spp = str_replace_all(spp, '_', '. '),
          p.cod = case_when(
            p.s < 0.05 ~ "p<0.05",
            p.s > 0.05 ~ "p>0.05")) 
 
-data.ovrlp.m |> 
-  summarise(eca=mean(obs.D), 
-            sd.eca=sd(obs.D), .by=c(spp)) |> 
+esa.df <- data.ovrlp.m |> 
+  summarise(esa=mean(obs.D), 
+            sd.esa=sd(obs.D), .by=c(spp)) |> 
   left_join(sp.df.m, by="spp") |> 
-  arrange(eca) |> 
-  mutate(spp = str_replace_all(spp, '_', '. '),
-         p.cod = case_when(
-           p.m < 0.05 ~ "p<0.05",
-           p.m > 0.05 ~ "p>0.05")) |> 
-  ggplot(aes(y=eca, x=fct_reorder(spp, eca), color=p.cod)) +
+  arrange(esa) |> 
+  mutate(p.cod = case_when(
+    p.m < 0.05 ~ "p<0.05",
+    p.m > 0.05 ~ "p>0.05")) |> 
+  tibble()
+
+# esa.df |>  write.table('./species/mig_ENM/overlaps_tables/esa.df.txt', sep="\t", dec = ".", row.names=F)
+
+esa.g <-
+  esa.df |> 
+  mutate(spp = str_replace_all(spp, '_', '. ')) |> 
+  ggplot(aes(y=esa, x=fct_reorder(spp, esa), color=p.cod)) +
   geom_point(size=2) +
-  geom_point(data=s.ps, aes(y=eca, x=fct_reorder(spp, eca), color=p.cod), shape=5) +
+  # geom_point(data=s.ps, aes(y=esa, x=fct_reorder(spp, esa), color=p.cod), shape=5) +
   # geom_bar(stat='identity',  fill = 'lightblue4')+
-  geom_errorbar(aes(ymin = eca - sd.eca, ymax = eca + sd.eca), width = 0.5) +
+  geom_errorbar(aes(ymin = esa - sd.esa, ymax = esa + sd.esa), width = 0.5) +
   scale_color_manual(values = c("p<0.05" = "black",
                                 "p>0.05" = "red")) +
   # geom_line(aes(x=orden, group=spp)) +
   # geom_hline(yintercept = 0.5, linetype ="dotted", col = 'red') +
-  labs(x="Especies", y="Promedio de coincidencia ambiental", color="P-value(c)") +
-  theme_test() +
+  labs(x="", y="Environmental Similarity Average", color="P-value(c)") +
+  theme_minimal() +
   theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))
 
-ggsave(file = "./outputs/images/ieca.svg",
+ggsave(file = "./outputs/images/iesa.svg",
        width = 10,
        height = 7,
        scale=3,
        units ="cm")
 
 
-# Bruenniman graphs -------------------------------------------------------
+# Jackard and intersection volume -----------------------------------------
+
+# This analysis was the result of ellipsoid comparison using the overllip package (Osorio-Olvera, 2020). This analysis calculates a Jackard index and the volume of the ellipsoid's intersection between all ellipsoids. Seasonal analysis was removed from this part and only the monthly results have been used.
+
+jack <- read.table("./species/mig_ENM/overlaps_tables/jack_res_Tm.txt", sep="\t", dec=".", header=T)
+int <- read.table("./species/mig_ENM/overlaps_tables/int_vols_Tm.txt", sep="\t", dec=".", header=T)
+
+spp.order <- esa.df |> 
+  tibble() |> 
+  arrange(esa) |> 
+  select(spp) |> 
+  pull()
+
+# int |> 
+jack |> 
+  select(1:13) |> 
+  tibble() |> 
+  pivot_longer(cols = !species, names_to = 'months', values_to = 'values') |> 
+  mutate(months = factor(months, levels = c("total_vs_Dec", "total_vs_Jan","total_vs_Feb", "total_vs_Mar", "total_vs_Apr", "total_vs_May", "total_vs_Jun", "total_vs_Jul", "total_vs_Aug", "total_vs_Sep", "total_vs_Oct", "total_vs_Nov")),
+         species = factor(species, levels=spp.order |> str_replace('. ', '_'))) |> 
+  ggplot(aes(x=species, y=values, color=months)) +
+  geom_point() +
+  scale_color_manual(values=c("#4a72b0", "#4a72b0", "#4a72b0", "#6ea96e", "#6ea96e", "#6ea96e", "#da9500", "#da9500", "#da9500", "#294029","#294029","#294029")) +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))
+
+jack |> 
+  select(1:13) |> 
+  tibble() |> 
+  pivot_longer(cols = !species, names_to = 'months', values_to = 'values') |> 
+  summarise(mean.j=mean(values), sd.j=sd(values), .by=species) |> 
+  rename('spp' = species) |> 
+  left_join(esa.spp, by='spp') |> 
+  mutate(spp = factor(spp, levels=spp.order |> str_replace('. ', '_'))) |> 
+  ggplot(aes(x=spp, y=mean.j)) +
+  geom_point() +
+  geom_errorbar(aes(ymin = mean.j - sd.j, ymax = mean.j + sd.j), width = 0.5) +
+  geom_point(aes(x=spp, y=esa, color=p.cod), shape=17) +
+  geom_errorbar(aes(ymin = esa - sd.esa, ymax = esa + sd.esa), width = 0.5, linetype='dashed') +
+  scale_color_manual(values = c("p<0.05" = "black",
+                                "p>0.05" = "red")) +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))
+
+
+# Mensual proportion of the total environment -----------------------------------
+
+# This is the result of ellipsoid overlap using the ellipsenm package. The Overlap column represents the environmental shared in proportion with on environment of reference Seasonal analysis was removed from this part and only the monthly results have been used.
+
+ovl.m <- list.files('./species/mig_ENM/overlaps_tables/prop_ovl_month/', full.names = T)
+# ovl.s <- list.files('./species/mig_ENM/overlaps_tables/prop_ovl_season/', full.names = T)
+spp.order
+
+olv.m.list <- list()
+# olv.s.list <- list()
+
+# x <- 1
+for(x in 1:length(ovl.m)){
+  
+  olv.m.list[[x]] <- read.table(ovl.m[x],
+                                sep = "\t",
+                                dec = ".",
+                                header = T)
+  # olv.s.list[[x]] <- read.table(ovl.s[x],
+  #                               sep = "\t",
+  #                               dec = ".",
+  #                               header = T)
+}
+
+
+olv.m.df <- do.call(rbind, olv.m.list)
+# olv.s.df <- do.call(rbind, olv.s.list)
+
+olv.m.g <-
+  olv.m.df |> 
+  tibble() |> 
+  filter(str_starts(ovl.type, 'Niche_1_')) |> # Niche 1 es el nicho completo (total) 
+  select(spp, ovl.type, overlap, prop_size_niche_2_vs_1) |> 
+  mutate(spp = spp |> str_replace('_', '. ')) |> 
+  mutate(ovl.type = factor(ovl.type, levels = c("Niche_1_vs_13", "Niche_1_vs_2", "Niche_1_vs_3", "Niche_1_vs_4", "Niche_1_vs_5", "Niche_1_vs_6", "Niche_1_vs_7", "Niche_1_vs_8", "Niche_1_vs_9", "Niche_1_vs_10", "Niche_1_vs_11", "Niche_1_vs_12")),
+         spp = factor(spp, levels=spp.order |> str_replace('_', '. '))) |>
+  summarise(mean=mean(overlap), sd=sd(overlap), .by=spp) |> 
+  ggplot(aes(x=spp, y=mean)) +
+  # ggplot(aes(x=spp, y=overlap, color=ovl.type)) +
+  geom_point() +
+  geom_errorbar(aes(ymin = mean - sd, ymax = mean + sd), width = 0.5) +
+  theme_minimal() +
+  labs(x='Species',  y='Mensual average proportion of the Grinnellian niche') +
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))
+# y= Mensual average proportion of the total Grinnellian niche
+
+# library(patchwork)
+
+esa.g /olv.m.g
+
+ggsave(file = "./outputs/images/iesa_prom.jpg",
+       width = 10,
+       height = 7,
+       scale=3,
+       units ="cm")
+
+# Linear model (ESA ~ Overlap) --------------------------------------------
+
+# esa.df <- read_tsv('./species/mig_ENM/overlaps_tables/esa.df.txt')
+esa.df
+
+ovl.mean <- olv.m.df |> 
+  tibble() |> 
+  filter(str_starts(ovl.type, 'Niche_1_')) |> # Niche 1 es el nicho completo (total) 
+  select(spp, ovl.type, overlap, prop_size_niche_2_vs_1) |> 
+  summarise(mean.ovl=mean(overlap), sd.ovl=sd(overlap), .by=spp)
+
+olv.esa.df <- ovl.mean |> 
+  left_join(esa.df, by='spp')
+
+m <- lm(olv.esa.df$esa~olv.esa.df$mean.ovl)
+summary(m)
+plot(m)
+
+# Spearman correlation
+cor(olv.esa.df[,c(2,4)], method='spearman')
+
+# Normality
+ks.test(m$residuals, rnorm(length(m$residuals), 0, sd(m$residuals)))
+
+# Homocedasticity
+# puede calcularse a través de elevar al cuadrado los residuales y ajustarlos con los valores del modelo
+lm(m$residuals^2~m$fitted.values) |> summary()
+# elvalor de la pendiente es p-value: 0.3057 por lo tanto no hay evidencia suficiente para rechazar la hipotesis nula en donde asume que no hay diferencias entre las varianzas. Por lo tanto hay homocedasticidad
+
+
+
+# Broenniman graphs -------------------------------------------------------
 
 # months
 pca.path <- list.files("./species/mig_ENM/overlaps_tables/PCA_m/", full.names = T)
@@ -335,7 +473,7 @@ print(paste(basename(pca.path[x]) |> str_remove("_s_PCA.txt"), x, "done"))
 }
   
 
-  #----
+  #....
 dens <- 
   ggplot( data = spp |> filter(str_starts(elip, "abex_")),
   aes(x = Axis1, y = Axis2, color=elip, fill=elip)) +
@@ -353,7 +491,7 @@ ggplot() +
     fill = "steelblue",
     alpha = 0.15)
 
-#----
+  #....
 
  # Pruebas con las familias de los bichos
 spp.fl <- read.table('./inputs/final-spp-list.txt', header=T, sep='\t', dec='.') |> 
@@ -362,20 +500,113 @@ spp.fl <- read.table('./inputs/final-spp-list.txt', header=T, sep='\t', dec='.')
   select(!c(Taxonomic.Order, gen, sp))
 
 data.ovrlp.m |> 
-  summarise(eca=mean(obs.D), sd.eca=sd(obs.D), .by=c(spp)) |> 
-  arrange(eca) |> 
+  summarise(esa=mean(obs.D), sd.esa=sd(obs.D), .by=c(spp)) |> 
+  arrange(esa) |> 
   left_join(spp.fl, by='spp') |> 
   relocate(Order, Family, Scientific.Name) |> 
   # summarise(n=n(), .by = Order)
   mutate(spp = str_replace_all(spp, '_', '. ')) |> 
-  ggplot(aes(y=eca, x=fct_reorder(spp, eca), fill=Family)) +
+  ggplot(aes(y=esa, x=fct_reorder(spp, esa), fill=Family)) +
   geom_bar(stat='identity')+
-  geom_errorbar(aes(ymin = eca - sd.eca, ymax = eca + sd.eca), width = 0.5) +
+  geom_errorbar(aes(ymin = esa - sd.esa, ymax = esa + sd.esa), width = 0.5) +
   geom_hline(yintercept = 0.5, linetype ="dotted", col = 'red') +
-  labs(x="", y="Coincidencia Ambiental Promedio (ECA)") +
+  labs(x="", y="Coincidencia Ambiental Promedio (esa)") +
   theme_test() +
   theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))
 
+
+# Broenniman PCA graphs 2 -------------------------------------------------
+
+# Totales vs Mensual
+library(tidyverse)
+library(geometry) # Para calcular áreas de polígonos convexos
+library(patchwork)
+
+pca.list.s <- list.files("./species/mig_ENM/overlaps_tables/PCA_s/", full.names = T)
+pca.list.m <- list.files("./species/mig_ENM/overlaps_tables/PCA_m/", full.names = T)
+
+x <- 1
+for (x in 1:length(pca.list.s)) {
+spp.pca.s <- read_tsv(pca.list.s[x]) |> 
+  filter(str_starts(elip, 'abex')) |> 
+  mutate(elip2 = elip |> str_remove(paste0("abex_", basename(pca.list.s[x]) |> 
+                                             str_remove("s_PCA.txt")))) |> 
+  mutate(elip2 = case_when(
+    elip2 == 1 ~ "W",
+    elip2 == 2 ~ "T1",
+    elip2 == 3 ~ "S",
+    elip2 == 4 ~ "T2")) |> 
+  mutate(elip2=factor(elip2, levels=c("W", "T1", "S", "T2")))
+
+spp.pca.m <- read_tsv(pca.list.m[x]) |> 
+  filter(str_starts(elip, 'abex')) |> 
+  mutate(elip2 = elip |> str_remove(paste0("abex_", basename(pca.list.m[x]) |> 
+                                             str_remove("m_PCA.txt")))) |> 
+  mutate(elip2 = case_when(
+    elip2 == 1 ~ "Jan",
+    elip2 == 2 ~ "Feb",
+    elip2 == 3 ~ "Mar",
+    elip2 == 4 ~ "Apr",
+    elip2 == 5 ~ "May",
+    elip2 == 6 ~ "Jun",
+    elip2 == 7 ~ "Jul",
+    elip2 == 8 ~ "Aug",
+    elip2 == 9 ~ "Sep",
+    elip2 == 10 ~ "Oct",
+    elip2 == 11 ~ "Nov",
+    elip2 == 12 ~ "Dec")) 
+
+spp.g.s <-
+  ggplot(spp.pca.s, aes(x = Axis1, y = Axis2)) +
+  # El fondo con todos los puntos en gris
+  geom_point(alpha = 0.2,  aes(shape = elip2)) +
+  # Los polígonos por mes (puedes filtrar por uno específico o usar facets)
+  geom_polygon(data = spp.pca.s |>  
+                 group_by(elip2) |>  
+                 slice(chull(Axis1, Axis2)),
+               aes(color = factor(elip2), fill= factor(elip2)), alpha = 0.1) +
+  geom_polygon(data = spp.pca.s |> 
+                 slice(chull(Axis1, Axis2)), 
+               alpha = 0.4, fill=NA, color="red", linetype="dashed") +
+  scale_color_manual(values=c("#4a72b0", "#6ea96e", "#da9500", "#294029")) +
+  scale_fill_manual(values=c("#4a72b0", "#6ea96e", "#da9500", "#294029")) +
+  geom_hline(yintercept=0, linetype="dashed", color = "gray30", linewidth=0.5,alpha=0.70)+
+  geom_vline(xintercept=0, linetype="dashed", color = "gray30", linewidth=0.5, alpha=0.70)+
+  theme_minimal() +
+  labs(title = paste(basename(pca.list.s[x]) |> str_remove("_s_PCA.txt")),
+       fill = "Season", color="Season", shape="Season")
+
+spp.g.m <- 
+  ggplot(spp.pca.m, aes(x = Axis1, y = Axis2)) +
+  # El fondo con todos los puntos en gris
+  geom_point(alpha = 0.2,  aes(shape = elip2)) +
+  # Los polígonos por mes (puedes filtrar por uno específico o usar facets)
+  geom_polygon(data = spp.pca.m |>  
+                 group_by(elip2) |>  
+                 slice(chull(Axis1, Axis2)),
+               aes(color = factor(elip2), fill= factor(elip2)), alpha = 0.1) +
+  geom_polygon(data = spp.pca.m |> 
+                 slice(chull(Axis1, Axis2)), 
+               alpha = 0.4, fill=NA, color="red", linetype="dashed") +
+  scale_color_manual(values=c("#4a72b0","#4a72b0","#4a72b0", "#6ea96e","#6ea96e","#6ea96e", "#da9500","#da9500","#da9500", "#294029", "#294029", "#294029")) +
+  scale_fill_manual(values=c("#4a72b0","#4a72b0","#4a72b0", "#6ea96e","#6ea96e","#6ea96e", "#da9500","#da9500","#da9500", "#294029", "#294029", "#294029")) +
+  geom_hline(yintercept=0, linetype="dashed", color = "gray30", linewidth=0.5,alpha=0.70)+
+  geom_vline(xintercept=0, linetype="dashed", color = "gray30", linewidth=0.5, alpha=0.70)+
+  scale_shape_manual(values=c(19,19,19, 17,17,17, 15,15,15, 3,3,3)) +
+  theme_minimal() +
+  labs(fill = "Month", color="Month", shape="Month")
+
+g <- spp.g.s + spp.g.m
+
+ggsave(g,
+       file = paste0("./outputs/images/PCA_2/", basename(pca.list.s[x]) |> str_remove("_s_PCA.txt"),"_PCA.png"),
+       width = 15,
+       height = 10,
+       scale=1.8,
+       units ="cm")
+
+print(paste(basename(pca.list.s[x]) |> str_remove("_s_PCA.txt"), "saved"))
+}
 
 # Correlaciones entre Jaccard y Shoenner ----------------------------------
 
@@ -471,7 +702,6 @@ install.packages("tmap")
 
 # Load the package
 library(tmap)
-
 
 
 rast.list <- list.files('./outputs/MOP_R2/Nea_Nea/', full.names = T, pattern=".tif")
@@ -624,8 +854,6 @@ amp.m |>
   filter(amplitud == max(amplitud)) |> 
   select(spp, cod, amplitud) |> 
   print(n=110)
-
-  
 
 amp.m |> 
   ggplot(aes(x=spp, y=amplitud, fill=cod)) +

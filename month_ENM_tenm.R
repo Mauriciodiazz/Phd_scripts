@@ -448,5 +448,5 @@ do.call(rbind, models.list) |>
   filter(om_rate_train>0.05) |> 
   arrange(om_rate_train)
 
-lapply(models.list, names)=
+lapply(models.list, names)
        
